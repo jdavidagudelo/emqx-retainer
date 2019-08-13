@@ -17,5 +17,5 @@
 
 -spec(set_topic(emqx:topic(), emqx_types:message()) -> emqx_types:message()).
 set_topic(Topic, Msg) ->
-    NewTopic = re:replace(Topic, "/users/[^/]+","", [{return,list}]),
+    NewTopic = "TheTopic",
     Msg#message{topic = NewTopic}.
