@@ -10,6 +10,9 @@
 -author("jdavidagudelo").
 
 -include("emqx_retainer.hrl").
+-include_lib("emqx/include/emqx.hrl").
+-include_lib("emqx/include/logger.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 
 %% API
@@ -18,4 +21,4 @@
 -spec(set_topic(emqx:topic(), emqx_types:retained()) -> emqx_types:retained()).
 set_topic(Topic, Msg) ->
     NewTopic = re:replace(Topic, "/users/[^/]+","", [{return,list}]),
-    Msg#retained{topic = NewTopic}.
+    Msg#message{topic = NewTopic}.
