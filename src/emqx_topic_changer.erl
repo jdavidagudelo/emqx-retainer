@@ -9,7 +9,7 @@
 -module(emqx_topic_changer).
 -author("jdavidagudelo").
 
--include("emqx.hrl").
+-include("emqx_retainer.hrl").
 
 
 %% API
