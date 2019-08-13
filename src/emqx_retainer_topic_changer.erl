@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 06. Aug 2019 4:55 p. m.
 %%%-------------------------------------------------------------------
--module(emqx_topic_changer).
+-module(emqx_retainer_topic_changer).
 -author("jdavidagudelo").
 
 -include("emqx_retainer.hrl").

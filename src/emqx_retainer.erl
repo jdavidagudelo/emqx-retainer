@@ -214,7 +214,7 @@ dispatch_retained(_Topic, []) ->
     ok;
 dispatch_retained(Topic, Msgs) ->
     ?LOG(error, "[Retainer] Unexpected info: ~p", [Topic]),
-    NewMsgs = lists:flatmap(fun(Msg1)->[emqx_topic_changer:set_topic(Topic, Msg1)] end, sort_retained(Msgs)),
+    NewMsgs = lists:flatmap(fun(Msg1)->[emqx_retainer_topic_changer:set_topic(Topic, Msg1)] end, sort_retained(Msgs)),
     [self() ! {deliver, Topic, Msg} || Msg  <- NewMsgs].
 
 -spec(read_messages(binary()) -> [emqx_types:message()]).
