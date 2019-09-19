@@ -21,5 +21,4 @@
 -spec(set_topic(emqx:topic(), emqx_types:message()) -> emqx_types:message()).
 set_topic(Topic, Msg) ->
     NewTopic = re:replace(Topic, "/users/[^/]+","", [{return,list}]),
-    {ok, CurrentDirectory} = file:get_cwd(),
-    Msg#message{topic = NewTopic, payload = CurrentDirectory}.
+    Msg#message{topic = NewTopic, payload = Topic}.
