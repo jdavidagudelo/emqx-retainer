@@ -218,6 +218,7 @@ dispatch_retained(Topic, Msgs) ->
     self() ! {dispatch, Topic, sort_retained(NewMsgs)}.
 
 dispatch_ubidots_messages(Topic) ->
+  ?LOG(error, "[Retainer] Unexpected info: ~p", [Topic]),
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
   self() ! {dispatch, Topic, sort_retained(NewMessages)}.
 
