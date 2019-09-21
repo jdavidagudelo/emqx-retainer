@@ -76,4 +76,5 @@ get_messages(Topic, [Value|Rest]) ->
 
 get_retained_messages_from_topic(Topic) ->
   Values = get_values_from_topic(Topic),
+  ?LOG(error, "[Retainer] Unexpected info: ~p", [Values]),
   get_messages(Topic, Values).
