@@ -15,7 +15,8 @@
 
 
 %% API
--export([get_retained_messages_from_topic/1]).
+-export([get_retained_messages_from_topic/1, get_retainer_configuration/0, get_reactor_redis_client/1, get_ubidots_redis_client/1,
+  get_lua_script_from_file/1, get_variables_from_topic/3, get_values_variables/3, get_values_from_topic/1, get_messages/2]).
 
 get_retainer_configuration() ->
   FilePathConfiguration = filename:join(file:get_cwd(), "retainer_changer", "retainer_changer.conf"),
