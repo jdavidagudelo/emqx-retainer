@@ -46,6 +46,7 @@ get_ubidots_redis_client(Options) ->
   RedisClient.
 
 get_lua_script_from_file(FilePath) ->
+  ?LOG(error, "[Retainer] Lua script: ~p", [ReactorScriptFilePath]),
   {ok, FileData} = file:read_file(FilePath),
   FileData.
 
