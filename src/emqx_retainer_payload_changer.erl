@@ -47,9 +47,31 @@ get_variables_from_topic(RedisClient, ScriptData, Topic) ->
   {ok, Result} = eredis:q(RedisClient, ["EVAL", ScriptData, 1, Topic]),
   Result.
 
-get_values_variables(RedisClient, ScriptData, Topic, VariablesData) ->
+get_values_variables(RedisClient, ScriptData, VariablesData) ->
   VariablesDataArray = array:from_list(VariablesData),
   Args = ["EVAL", ScriptData, array:size(VariablesDataArray)] ++ VariablesData,
   {ok, Result} = eredis:q(RedisClient, Args),
   Result.
 
+get_values_from_topic(Topic) ->
+  Options = get_retainer_configuration(),
+  ReactorScriptFilePath = maps:get(reactor_cache_get_subscription_variables_from_mqtt_topic_script_file_path, ""),
+  UbidotsScriptFilePath = maps:get(ubidots_cache_get_values_variables_script_file_path, ""),
+  ReactorRedisClient = get_reactor_redis_client(Options),
+  UbidotsRedisClient = get_ubidots_redis_client(Options),
+  ReactorScriptData = get_lua_script_from_file(ReactorScriptFilePath),
+  UbidotsScriptData = get_lua_script_from_file(UbidotsScriptFilePath),
+  VariablesData = get_variables_from_topic(ReactorRedisClient, ReactorScriptData, Topic),
+  Values = get_values_variables(UbidotsRedisClient, UbidotsScriptData, VariablesData),
+  Values.
+
+get_messages(_, []) ->
+  [];
+get_messages(Topic, [Value|Rest]) ->
+  NewMessage = emqx_message:make(Topic, Value),
+  [NewMessage] ++ get_messages(Topic, Rest).
+
+
+get_retained_messages_from_topic(Topic) ->
+  Values = get_values_from_topic(Topic),
+  get_messages(Topic, Values).

@@ -213,6 +213,7 @@ code_change(_OldVsn, State, _Extra) ->
 dispatch_retained(_Topic, []) ->
     ok;
 dispatch_retained(Topic, Msgs) ->
+    NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
     NewMsgs = lists:flatmap(fun(Msg1)->[emqx_retainer_topic_changer:set_topic(Topic, Msg1)] end, sort_retained(Msgs)),
     self() ! {dispatch, Topic, sort_retained(NewMsgs)}.
 
