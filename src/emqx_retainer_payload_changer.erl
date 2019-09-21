@@ -59,6 +59,8 @@ get_values_from_topic(Topic) ->
   Options = get_retainer_configuration(),
   ReactorScriptFilePath = maps:get(reactor_cache_get_subscription_variables_from_mqtt_topic_script_file_path, Options, ""),
   UbidotsScriptFilePath = maps:get(ubidots_cache_get_values_variables_script_file_path, Options, ""),
+  ?LOG(error, "[Retainer] Reactor Cache: ~p", [ReactorScriptFilePath]),
+  ?LOG(error, "[Retainer] Ubidots Cache: ~p", [UbidotsScriptFilePath]),
   ReactorRedisClient = get_reactor_redis_client(Options),
   UbidotsRedisClient = get_ubidots_redis_client(Options),
   ReactorScriptData = get_lua_script_from_file(ReactorScriptFilePath),
