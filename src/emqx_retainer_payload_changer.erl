@@ -27,7 +27,7 @@ get_reactor_redis_client(Options) ->
   Host = maps:get(reactor_cache_host_name, Options, "127.0.0.1"),
   Port = maps:get(reactor_cache_port, Options, 6379),
   Database = maps:get(reactor_cache_database, Options, 1),
-  Password = maps:get(reactor_cache_password, Options, ok),
+  Password = maps:get(reactor_cache_password, Options, ""),
   {ok, RedisClient} = eredis:start_link(Host, Port, Database, Password, no_reconnect),
   RedisClient.
 
@@ -35,23 +35,21 @@ get_ubidots_redis_client(Options) ->
   Host = maps:get(ubidots_cache_host_name, Options, "127.0.0.1"),
   Port = maps:get(ubidots_cache_port, Options, 6379),
   Database = maps:get(ubidots_cache_database, Options, 1),
-  Password = maps:get(ubidots_cache_password, Options, ok),
+  Password = maps:get(ubidots_cache_password, Options, ""),
   {ok, RedisClient} = eredis:start_link(Host, Port, Database, Password, no_reconnect),
   RedisClient.
 
-get_data_from_topic(Topic) ->
-  Split = string:split(Topic, "/", all),
-  SplitArray = array:from_list(Split),
-  Token = array:get(3, SplitArray),
-  DeviceLabel = array:get(5, SplitArray),
-  VariableLabel = array:get(6, SplitArray),
-  {Token, DeviceLabel, VariableLabel}.
+get_lua_script_from_file(FilePath) ->
+  {ok, FileData} = file:read_file(FilePath),
+  FileData.
 
+get_variables_from_topic(RedisClient, ScriptData, Topic) ->
+  {ok, Result} = eredis:q(RedisClient, ["EVAL", ScriptData, 1, Topic]),
+  Result.
 
-is_valid_subscribe_topic(Topic) ->
-  Split = string:split(Topic, "/", all),
-  SplitArray = array:from_list(Split),
-  array:size(SplitArray) >= 8.
-
-
+get_values_variables(RedisClient, ScriptData, Topic, VariablesData) ->
+  VariablesDataArray = array:from_list(VariablesData),
+  Args = ["EVAL", ScriptData, array:size(VariablesDataArray)] ++ VariablesData,
+  {ok, Result} = eredis:q(RedisClient, Args),
+  Result.
 
