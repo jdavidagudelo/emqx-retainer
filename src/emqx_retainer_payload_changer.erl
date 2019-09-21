@@ -51,6 +51,8 @@ get_lua_script_from_file(FilePath) ->
   FileData.
 
 get_variables_from_topic(RedisClient, ScriptData, Topic) ->
+  ?LOG(error, "[Retainer] Script Data: ~p", [ScriptData]),
+  ?LOG(error, "[Retainer] Script Topic: ~p", [Topic]),
   {ok, Result} = eredis:q(RedisClient, ["EVAL", ScriptData, 1, Topic]),
   Result.
 
