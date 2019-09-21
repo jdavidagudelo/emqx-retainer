@@ -70,13 +70,13 @@ get_values_from_topic(Topic) ->
   Values = get_values_variables(UbidotsRedisClient, UbidotsScriptData, VariablesData),
   Values.
 
-get_messages(_, []) ->
+get_messages([]) ->
   [];
-get_messages(Topic, [Value|Rest]) ->
-  NewMessage = emqx_retainer_topic_changer:set_topic(Topic, emqx_message:make(Topic, Value)),
-  [NewMessage] ++ get_messages(Topic, Rest).
+get_messages([Topic, Value|Rest]) ->
+  NewMessage = emqx_message:make(Topic, Value),
+  [NewMessage | get_messages(Rest)].
 
 
 get_retained_messages_from_topic(Topic) ->
   Values = get_values_from_topic(Topic),
-  get_messages(Topic, Values).
+  get_messages(Values).
