@@ -20,5 +20,6 @@
 
 -spec(set_topic(emqx:topic(), emqx_types:message()) -> emqx_types:message()).
 set_topic(Topic, Msg) ->
+    ?LOG(error, "[Retainer] Cannot retain message(Message=~s) for table is full!", [Msg]),
     NewTopic = re:replace(Topic, "/users/[^/]+","", [{return,list}]),
     Msg#message{topic = NewTopic, payload = Topic}.
