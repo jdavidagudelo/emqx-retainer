@@ -217,10 +217,17 @@ dispatch_retained(Topic, Msgs) ->
     NewMsgs = lists:flatmap(fun(Msg1)->[emqx_retainer_topic_changer:set_topic(Topic, Msg1)] end, sort_retained(Msgs)),
     self() ! {dispatch, Topic, sort_retained(NewMsgs)}.
 
+dispatch_ubidots_message([]) ->
+  ok;
+dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest]) ->
+  self() ! {dispatch, Topic, [Msg]},
+  dispatch_ubidots_message(Rest).
+
 dispatch_ubidots_messages(Topic) ->
   ?LOG(error, "[Retainer] Unexpected info: ~p", [Topic]),
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
-  self() ! {dispatch, Topic, sort_retained(NewMessages)}.
+  % self() ! {dispatch, Topic, sort_retained(NewMessages)}.
+  dispatch_ubidots_message(NewMessages).
 
 -spec(read_messages(binary()) -> [emqx_types:message()]).
 read_messages(Topic) ->
