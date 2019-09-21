@@ -18,6 +18,10 @@
 -export([get_retained_messages_from_topic/1, get_retainer_configuration/0, get_reactor_redis_client/1, get_ubidots_redis_client/1,
   get_lua_script_from_file/1, get_variables_from_topic/3, get_values_variables/3, get_values_from_topic/1, get_messages/2]).
 
+get_file_path_local(LocalFilePath) ->
+  {ok, FilePath} = file:get_cwd(),
+  filename:join([FilePath, LocalFilePath]).
+
 get_retainer_configuration() ->
   {ok, FilePath} = file:get_cwd(),
   FilePathConfiguration = filename:join([FilePath, "retainer_changer", "retainer_changer.conf"]),
@@ -63,9 +67,10 @@ get_values_from_topic(Topic) ->
   ?LOG(error, "[Retainer] Ubidots Cache: ~p", [UbidotsScriptFilePath]),
   ReactorRedisClient = get_reactor_redis_client(Options),
   UbidotsRedisClient = get_ubidots_redis_client(Options),
-  ReactorScriptData = get_lua_script_from_file(ReactorScriptFilePath),
-  UbidotsScriptData = get_lua_script_from_file(UbidotsScriptFilePath),
+  ReactorScriptData = get_lua_script_from_file(get_file_path_local(ReactorScriptFilePath)),
+  UbidotsScriptData = get_lua_script_from_file(get_file_path_local(UbidotsScriptFilePath)),
   VariablesData = get_variables_from_topic(ReactorRedisClient, ReactorScriptData, Topic),
+  ?LOG(error, "[Retainer] Variable Data: ~p", [VariablesData]),
   Values = get_values_variables(UbidotsRedisClient, UbidotsScriptData, VariablesData),
   Values.
 
