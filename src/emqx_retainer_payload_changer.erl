@@ -35,6 +35,7 @@ get_reactor_redis_client(Options) ->
   Database = maps:get(reactor_cache_database, Options, 1),
   Password = maps:get(reactor_cache_password, Options, ""),
   {ok, RedisClient} = eredis:start_link(Host, Port, Database, Password, no_reconnect),
+  ?LOG(error, "[Retainer] Redis Reactor Client: ~p", [RedisClient]),
   RedisClient.
 
 get_ubidots_redis_client(Options) ->
