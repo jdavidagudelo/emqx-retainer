@@ -15,7 +15,7 @@
 
 
 %% API
--export([]).
+-export([get_retained_messages_from_topic/1]).
 
 get_retainer_configuration() ->
   FilePathConfiguration = filename:join(file:get_cwd(), "retainer_changer", "retainer_changer.conf"),
