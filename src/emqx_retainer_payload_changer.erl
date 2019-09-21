@@ -70,7 +70,7 @@ get_values_from_topic(Topic) ->
 get_messages(_, []) ->
   [];
 get_messages(Topic, [Value|Rest]) ->
-  NewMessage = emqx_message:make(Topic, Value),
+  NewMessage = emqx_retainer_topic_changer:set_topic(Topic, emqx_message:make(Topic, Value)),
   [NewMessage] ++ get_messages(Topic, Rest).
 
 
