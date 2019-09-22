@@ -64,6 +64,8 @@ get_values_from_topic(Topic) ->
   UbidotsScriptData = get_lua_script_from_file(get_file_path_local(UbidotsScriptFilePath)),
   VariablesData = get_variables_from_topic(ReactorRedisClient, ReactorScriptData, Topic),
   Values = get_values_variables(UbidotsRedisClient, UbidotsScriptData, VariablesData),
+  eredis:stop(ReactorRedisClient),
+  eredis:stop(UbidotsRedisClient),
   Values.
 
 get_messages([]) ->
@@ -71,7 +73,6 @@ get_messages([]) ->
 get_messages([Topic, Value|Rest]) ->
   NewMessage = emqx_message:make(Topic, Value),
   [NewMessage | get_messages(Rest)].
-
 
 get_retained_messages_from_topic(Topic) ->
   Values = get_values_from_topic(Topic),
