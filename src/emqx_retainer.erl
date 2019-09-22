@@ -54,16 +54,6 @@ load(Env) ->
 
 on_session_subscribed(#{client_id := _ClientId}, Topic, #{rh := Rh, first := First}) ->
   dispatch_ubidots_messages(Topic).
-    %%if
-    %%    Rh =:= 0 orelse (Rh =:= 1 andalso First =:= true) ->
-    %%        Msgs = case emqx_topic:wildcard(Topic) of
-    %%                   false -> read_messages(Topic);
-    %%                   true  -> match_messages(Topic)
-    %%               end,
-    %%        dispatch_retained(Topic, Msgs);
-    %%    true ->
-    %%        ok
-    %%end.
 
 %% RETAIN flag set to 1 and payload containing zero bytes
 on_message_publish(Msg = #message{flags   = #{retain := true},
@@ -214,8 +204,7 @@ code_change(_OldVsn, State, _Extra) ->
 dispatch_retained(_Topic, []) ->
     ok;
 dispatch_retained(Topic, Msgs) ->
-    NewMsgs = lists:flatmap(fun(Msg1)->[emqx_retainer_topic_changer:set_topic(Topic, Msg1)] end, sort_retained(Msgs)),
-    self() ! {dispatch, Topic, sort_retained(NewMsgs)}.
+    [self() ! {deliver, Topic, Msg} || Msg  <- sort_retained(Msgs)].
 
 dispatch_ubidots_message([]) ->
   ok;
@@ -224,9 +213,7 @@ dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest]) ->
   dispatch_ubidots_message(Rest).
 
 dispatch_ubidots_messages(Topic) ->
-  ?LOG(error, "[Retainer] Unexpected info: ~p", [Topic]),
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
-  % self() ! {dispatch, Topic, sort_retained(NewMessages)}.
   dispatch_ubidots_message(NewMessages).
 
 -spec(read_messages(binary()) -> [emqx_types:message()]).

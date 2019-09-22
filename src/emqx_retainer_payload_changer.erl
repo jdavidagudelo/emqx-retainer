@@ -8,10 +8,6 @@
 %%%-------------------------------------------------------------------
 -module(emqx_retainer_payload_changer).
 -author("jdavidagudelo").
--include("emqx_retainer.hrl").
--include_lib("emqx/include/emqx.hrl").
--include_lib("emqx/include/logger.hrl").
--include_lib("stdlib/include/ms_transform.hrl").
 
 
 %% API
