@@ -51,5 +51,6 @@ unregister_config() ->
     clique:unregister_config_whitelist(Keys, ?APP).
 
 keys() ->
-    ["retainer.max_retained_messages", "retainer.max_payload_size", "retainer.expiry_interval"].
+    ["retainer.max_retained_messages", "retainer.max_payload_size", "retainer.expiry_interval",
+        "retainer.reactor_cache_host_name"].
 
