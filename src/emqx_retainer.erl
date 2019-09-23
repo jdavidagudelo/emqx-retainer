@@ -27,7 +27,7 @@
         , unload/0
         ]).
 
--export([ on_session_subscribed/4
+-export([ on_session_subscribed/3
         , on_message_publish/2
         ]).
 
@@ -49,11 +49,10 @@
 %%------------------------------------------------------------------------------
 
 load(Env) ->
-    emqx:hook('session.subscribed', fun ?MODULE:on_session_subscribed/4, [Env]),
+    emqx:hook('session.subscribed', fun ?MODULE:on_session_subscribed/3, []),
     emqx:hook('message.publish', fun ?MODULE:on_message_publish/2, [Env]).
 
-on_session_subscribed(#{client_id := _ClientId}, Topic, _, Env) ->
-  ?LOG(error, "[Retainer] Env value ~s", [proplists:get_value(reactor_cache_host_name, Env, "xxx")]),
+on_session_subscribed(#{client_id := _ClientId}, Topic, _) ->
   dispatch_ubidots_messages(Topic).
 
 %% RETAIN flag set to 1 and payload containing zero bytes
