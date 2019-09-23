@@ -53,7 +53,7 @@ load(Env) ->
     emqx:hook('message.publish', fun ?MODULE:on_message_publish/2, [Env]).
 
 on_session_subscribed(#{client_id := _ClientId}, Topic, _, Env) ->
-  ?LOG(error, "[Retainer] Env value", [proplists:get_value(reactor_cache_host_name, Env, "xxx")]),
+  ?LOG(error, "[Retainer] Env value ~s", [proplists:get_value(reactor_cache_host_name, Env, "xxx")]),
   dispatch_ubidots_messages(Topic).
 
 %% RETAIN flag set to 1 and payload containing zero bytes
