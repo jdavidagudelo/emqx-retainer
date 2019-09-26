@@ -107,11 +107,19 @@ retainer_test_() ->
   Devices = ["d1", "d1_id", ["v1", "v1_d1_id", "v2", "v2_d1_id", "v3", "v3_d1_id"],
     "d2", "d2_id", ["v1", "v1_d2_id", "v2", "v2_d2_id", "v3", "v3_d2_id"]],
   {ok, RedisClient} = eredis:start_link(),
+  eredis:q(RedisClient, ["FLUSHDB"]),
   initialize_mqtt_cache(RedisClient, "token", "owner_id", Devices),
   [Topic, Value | _Rest] = get_values_from_topic("/v1.6/users/token/devices/d1/v1"),
-  io:fwrite("The topic is ~s",[Topic]),
   [
     ?_assertEqual(<<"/v1.6/devices/d1/v1">>, Topic),
     ?_assertEqual(
       <<"{\"value\": 11.1, \"timestamp\": 11, \"context\": {\"a\": 11}, \"created_at\": 11}">>, Value)
+  ].
+
+retainer_empty_test_() ->
+  {ok, RedisClient} = eredis:start_link(),
+  eredis:q(RedisClient, ["FLUSHDB"]),
+  Result = get_values_from_topic("/v1.6/users/token/devices/d1/v1"),
+  [
+    ?_assertEqual(Result, [])
   ].

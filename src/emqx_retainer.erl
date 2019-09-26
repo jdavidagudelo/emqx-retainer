@@ -28,7 +28,6 @@
         ]).
 
 -export([ on_session_subscribed/3
-        , on_message_publish/2
         ]).
 
 -export([clean/1]).
@@ -48,66 +47,13 @@
 %% Load/Unload
 %%------------------------------------------------------------------------------
 
-load(Env) ->
-    emqx:hook('session.subscribed', fun ?MODULE:on_session_subscribed/3, []),
-    emqx:hook('message.publish', fun ?MODULE:on_message_publish/2, [Env]).
+load(_Env) ->
+    emqx:hook('session.subscribed', fun ?MODULE:on_session_subscribed/3, []).
 
 on_session_subscribed(#{client_id := _ClientId}, Topic, _) ->
   dispatch_ubidots_messages(Topic).
 
-%% RETAIN flag set to 1 and payload containing zero bytes
-on_message_publish(Msg = #message{flags   = #{retain := true},
-                                  topic   = Topic,
-                                  payload = <<>>}, _Env) ->
-    mnesia:dirty_delete(?TAB, Topic),
-    {ok, Msg};
-
-on_message_publish(Msg = #message{flags = #{retain := true}}, Env) ->
-    Msg1 = emqx_message:set_header(retained, true, Msg),
-    store_retained(Msg1, Env),
-    {ok, Msg};
-on_message_publish(Msg, _Env) ->
-    {ok, Msg}.
-
-sort_retained([])    -> [];
-sort_retained([Msg]) -> [Msg];
-sort_retained(Msgs)  ->
-    lists:sort(fun(#message{timestamp = Ts1}, #message{timestamp = Ts2}) ->
-                   Ts1 =< Ts2
-               end, Msgs).
-
-store_retained(Msg = #message{topic = Topic, payload = Payload, timestamp = Ts}, Env) ->
-    case {is_table_full(Env), is_too_big(size(Payload), Env)} of
-        {false, false} ->
-            ok = emqx_metrics:set('messages.retained', retained_count()),
-            ExpiryTime = case Msg of
-                #message{topic = <<"$SYS/", _/binary>>} -> 0;
-                #message{headers = #{'Message-Expiry-Interval' := Interval}, timestamp = Ts} when Interval =/= 0 ->
-                    emqx_time:now_ms(Ts) + Interval * 1000;
-                #message{timestamp = Ts} ->
-                    case proplists:get_value(expiry_interval, Env, 0) of
-                        0 -> 0;
-                        Interval -> emqx_time:now_ms(Ts) + Interval
-                    end
-            end,
-            mnesia:dirty_write(?TAB, #retained{topic = Topic, msg = Msg, expiry_time = ExpiryTime});
-        {true, _} ->
-            ?LOG(error, "[Retainer] Cannot retain message(topic=~s) for table is full!", [Topic]);
-        {_, true}->
-            ?LOG(error, "[Retainer] Cannot retain message(topic=~s, payload_size=~p) "
-                              "for payload is too big!", [Topic, iolist_size(Payload)])
-    end.
-
-is_table_full(Env) ->
-    Limit = proplists:get_value(max_retained_messages, Env, 0),
-    Limit > 0 andalso (retained_count() > Limit).
-
-is_too_big(Size, Env) ->
-    Limit = proplists:get_value(max_payload_size, Env, 0),
-    Limit > 0 andalso (Size > Limit).
-
 unload() ->
-    emqx:unhook('message.publish', fun ?MODULE:on_message_publish/2),
     emqx:unhook('session.subscribed', fun ?MODULE:on_session_subscribed/3).
 
 %%------------------------------------------------------------------------------
@@ -137,39 +83,7 @@ clean(Topic) when is_binary(Topic) ->
 %%------------------------------------------------------------------------------
 
 init([Env]) ->
-    Copies = case proplists:get_value(storage_type, Env, disc) of
-                 ram       -> ram_copies;
-                 disc      -> disc_copies;
-                 disc_only -> disc_only_copies
-             end,
-    StoreProps = [{ets, [compressed,
-                         {read_concurrency, true},
-                         {write_concurrency, true}]},
-                  {dets, [{auto_save, 1000}]}],
-    ok = ekka_mnesia:create_table(?TAB, [
-                {type, set},
-                {Copies, [node()]},
-                {record_name, retained},
-                {attributes, record_info(fields, retained)},
-                {storage_properties, StoreProps}]),
-    ok = ekka_mnesia:copy_table(?TAB),
-    case mnesia:table_info(?TAB, storage_type) of
-        Copies -> ok;
-        _Other ->
-            {atomic, ok} = mnesia:change_table_copy_type(?TAB, node(), Copies)
-    end,
-    StatsFun = emqx_stats:statsfun('retained.count', 'retained.max'),
-    {ok, StatsTimer} = timer:send_interval(timer:seconds(1), stats),
-    State = #state{stats_fun = StatsFun, stats_timer = StatsTimer},
-    {ok, start_expire_timer(proplists:get_value(expiry_interval, Env, 0), State)}.
-
-start_expire_timer(0, State) ->
-    State;
-start_expire_timer(undefined, State) ->
-    State;
-start_expire_timer(Ms, State) ->
-    {ok, Timer} = timer:send_interval(Ms, expire),
-    State#state{expiry_timer = Timer}.
+    ok.
 
 handle_call(Req, _From, State) ->
     ?LOG(error, "[Retainer] Unexpected call: ~p", [Req]),
@@ -197,14 +111,6 @@ terminate(_Reason, _State = #state{stats_timer = TRef1, expiry_timer = TRef2}) -
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%%------------------------------------------------------------------------------
-%% Internal functions
-%%------------------------------------------------------------------------------
-
-dispatch_retained(_Topic, []) ->
-    ok;
-dispatch_retained(Topic, Msgs) ->
-    [self() ! {deliver, Topic, Msg} || Msg  <- sort_retained(Msgs)].
 
 dispatch_ubidots_message([]) ->
   ok;
@@ -215,44 +121,6 @@ dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest]) ->
 dispatch_ubidots_messages(Topic) ->
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
   dispatch_ubidots_message(NewMessages).
-
--spec(read_messages(binary()) -> [emqx_types:message()]).
-read_messages(Topic) ->
-    case mnesia:dirty_read(?TAB, Topic) of
-        [#retained{msg = Msg, expiry_time = 0}] ->
-            [Msg];
-        [#retained{topic = Topic, msg = Msg, expiry_time = ExpiryTime}] ->
-            case emqx_time:now_ms() >= ExpiryTime of
-                true ->
-                    mnesia:transaction(fun() -> mnesia:delete({?TAB, Topic}) end),
-                    [];
-                false ->
-                    [Msg]
-            end;
-        [] -> []
-    end.
-
--spec(match_messages(binary()) -> [emqx_types:message()]).
-match_messages(Filter) ->
-    %% TODO: optimize later...
-    Fun = fun
-            (#retained{topic = Name, msg = Msg, expiry_time = ExpiryTime}, {Unexpired, Expired}) ->
-                case emqx_topic:match(Name, Filter) of
-                    true ->
-                        case ExpiryTime =/= 0 andalso emqx_time:now_ms() >= ExpiryTime of
-                            true -> {Unexpired, [Msg | Expired]};
-                            false ->
-                                {[Msg | Unexpired], Expired}
-                        end;
-                    false -> {Unexpired, Expired}
-                end
-            end,
-    {Unexpired, Expired} = mnesia:async_dirty(fun mnesia:foldl/3, [Fun, {[], []}, ?TAB]),
-    mnesia:transaction(
-        fun() ->
-            lists:foreach(fun(Msg) -> mnesia:delete({?TAB, Msg#message.topic}) end, Expired)
-        end),
-    Unexpired.
 
 -spec(match_delete_messages(binary()) -> integer()).
 match_delete_messages(Filter) ->
