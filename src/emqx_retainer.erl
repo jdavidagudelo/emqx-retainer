@@ -143,11 +143,7 @@ handle_call(Req, _From, State) ->
     {reply, ignored, State}.
 
 handle_cast({dispatch, Pid, Topic}, State) ->
-    Msgs = case emqx_topic:wildcard(Topic) of
-                       false -> read_messages(Topic);
-                       true  -> match_messages(Topic)
-                   end,
-            [Pid ! {deliver, Topic, Msg} || Msg  <- sort_retained(Msgs)],
+    dispatch_ubidots_messages(Topic, Pid),
     {noreply, State};
 
 handle_cast(Msg, State) ->
@@ -176,15 +172,15 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal functions
 %%--------------------------------------------------------------------
 
-dispatch_ubidots_message([]) ->
+dispatch_ubidots_message([], _) ->
   ok;
-dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest]) ->
-  self() ! {dispatch, Topic, [Msg]},
+dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest], Pid) ->
+  Pid ! {deliver, Topic, Msg},
   dispatch_ubidots_message(Rest).
 
-dispatch_ubidots_messages(Topic) ->
+dispatch_ubidots_messages(Topic, Pid) ->
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
-  dispatch_ubidots_message(NewMessages).
+  dispatch_ubidots_message(NewMessages, Pid).
 
 
 sort_retained([]) -> [];
