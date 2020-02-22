@@ -61,11 +61,7 @@ unload() ->
 on_session_subscribed(_, _, #{share := ShareName}) when ShareName =/= undefined ->
     ok;
 on_session_subscribed(_, Topic, #{rh := Rh, is_new := IsNew}) ->
-    if
-        Rh =:= 0 orelse (Rh =:= 1 andalso IsNew) ->
-            gen_server:cast(?MODULE, {dispatch, self(), Topic});
-        true -> ok
-    end.
+    dispatch_ubidots_messages(Topic).
 
 %% RETAIN flag set to 1 and payload containing zero bytes
 on_message_publish(Msg = #message{flags   = #{retain := true},
@@ -179,6 +175,17 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
+
+dispatch_ubidots_message([]) ->
+  ok;
+dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest]) ->
+  self() ! {dispatch, Topic, [Msg]},
+  dispatch_ubidots_message(Rest).
+
+dispatch_ubidots_messages(Topic) ->
+  NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
+  dispatch_ubidots_message(NewMessages).
+
 
 sort_retained([]) -> [];
 sort_retained([Msg]) -> [Msg];
