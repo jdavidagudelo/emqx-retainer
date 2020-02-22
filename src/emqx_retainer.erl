@@ -54,13 +54,14 @@ load(Env) ->
     emqx:hook('session.subscribed', fun ?MODULE:on_session_subscribed/3, []),
     emqx:hook('message.publish', fun ?MODULE:on_message_publish/2, [Env]).
 
-on_session_subscribed(#{client_id := _ClientId}, Topic, _) ->
-  dispatch_ubidots_messages(Topic).
-
 unload() ->
     emqx:unhook('message.publish', fun ?MODULE:on_message_publish/2),
     emqx:unhook('session.subscribed', fun ?MODULE:on_session_subscribed/3).
 
+on_session_subscribed(_, _, #{share := ShareName}) when ShareName =/= undefined ->
+    ok;
+on_session_subscribed(_, Topic, _) ->
+    dispatch_ubidots_messages(Topic).
 
 %% RETAIN flag set to 1 and payload containing zero bytes
 on_message_publish(Msg = #message{flags   = #{retain := true},
@@ -174,11 +175,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
-
-dispatch_retained(_Topic, []) ->
-    ok;
-dispatch_retained(Topic, Msgs) ->
-    [self() ! {deliver, Topic, Msg} || Msg  <- sort_retained(Msgs)].
 
 dispatch_ubidots_message([]) ->
   ok;
