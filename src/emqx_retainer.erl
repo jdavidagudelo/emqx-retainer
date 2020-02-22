@@ -61,7 +61,11 @@ unload() ->
 on_session_subscribed(_, _, #{share := ShareName}) when ShareName =/= undefined ->
     ok;
 on_session_subscribed(_, Topic, #{rh := Rh, is_new := IsNew}) ->
-    dispatch_ubidots_messages(Topic).
+    if
+        Rh =:= 0 orelse (Rh =:= 1 andalso IsNew) ->
+            gen_server:cast(?MODULE, {dispatch, self(), Topic});
+        true -> ok
+    end.
 
 %% RETAIN flag set to 1 and payload containing zero bytes
 on_message_publish(Msg = #message{flags   = #{retain := true},
