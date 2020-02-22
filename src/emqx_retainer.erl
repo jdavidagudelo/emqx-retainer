@@ -180,7 +180,7 @@ dispatch_ubidots_message([], _) ->
   ok;
 dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest], Pid) ->
   Pid ! {deliver, Topic, Msg},
-  dispatch_ubidots_message(Rest).
+  dispatch_ubidots_message(Rest, Pid).
 
 dispatch_ubidots_messages(Topic, Pid) ->
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
