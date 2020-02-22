@@ -1,4 +1,5 @@
-%% Copyright (c) 2013-2019 EMQ Technologies Co., Ltd. All Rights Reserved.
+%%--------------------------------------------------------------------
+%% Copyright (c) 2020 EMQ Technologies Co., Ltd. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -11,6 +12,7 @@
 %% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
+%%--------------------------------------------------------------------
 
 -module(emqx_retainer).
 
@@ -44,9 +46,9 @@
 
 -record(state, {stats_fun, stats_timer, expiry_timer}).
 
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 %% Load/Unload
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 
 load(Env) ->
     emqx:hook('session.subscribed', fun ?MODULE:on_session_subscribed/3, []),
@@ -54,6 +56,11 @@ load(Env) ->
 
 on_session_subscribed(#{client_id := _ClientId}, Topic, _) ->
   dispatch_ubidots_messages(Topic).
+
+unload() ->
+    emqx:unhook('message.publish', fun ?MODULE:on_message_publish/2),
+    emqx:unhook('session.subscribed', fun ?MODULE:on_session_subscribed/3).
+
 
 %% RETAIN flag set to 1 and payload containing zero bytes
 on_message_publish(Msg = #message{flags   = #{retain := true},
@@ -69,50 +76,9 @@ on_message_publish(Msg = #message{flags = #{retain := true}}, Env) ->
 on_message_publish(Msg, _Env) ->
     {ok, Msg}.
 
-sort_retained([])    -> [];
-sort_retained([Msg]) -> [Msg];
-sort_retained(Msgs)  ->
-    lists:sort(fun(#message{timestamp = Ts1}, #message{timestamp = Ts2}) ->
-                   Ts1 =< Ts2
-               end, Msgs).
-
-store_retained(Msg = #message{topic = Topic, payload = Payload, timestamp = Ts}, Env) ->
-    case {is_table_full(Env), is_too_big(size(Payload), Env)} of
-        {false, false} ->
-            ok = emqx_metrics:set('messages.retained', retained_count()),
-            ExpiryTime = case Msg of
-                #message{topic = <<"$SYS/", _/binary>>} -> 0;
-                #message{headers = #{'Message-Expiry-Interval' := Interval}, timestamp = Ts} when Interval =/= 0 ->
-                    emqx_time:now_ms(Ts) + Interval * 1000;
-                #message{timestamp = Ts} ->
-                    case proplists:get_value(expiry_interval, Env, 0) of
-                        0 -> 0;
-                        Interval -> emqx_time:now_ms(Ts) + Interval
-                    end
-            end,
-            mnesia:dirty_write(?TAB, #retained{topic = Topic, msg = Msg, expiry_time = ExpiryTime});
-        {true, _} ->
-            ?LOG(error, "[Retainer] Cannot retain message(topic=~s) for table is full!", [Topic]);
-        {_, true}->
-            ?LOG(error, "[Retainer] Cannot retain message(topic=~s, payload_size=~p) "
-                              "for payload is too big!", [Topic, iolist_size(Payload)])
-    end.
-
-is_table_full(Env) ->
-    Limit = proplists:get_value(max_retained_messages, Env, 0),
-    Limit > 0 andalso (retained_count() > Limit).
-
-is_too_big(Size, Env) ->
-    Limit = proplists:get_value(max_payload_size, Env, 0),
-    Limit > 0 andalso (Size > Limit).
-
-unload() ->
-    emqx:unhook('message.publish', fun ?MODULE:on_message_publish/2),
-    emqx:unhook('session.subscribed', fun ?MODULE:on_session_subscribed/3).
-
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 %% API
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 
 %% @doc Start the retainer
 -spec(start_link(Env :: list()) -> emqx_types:startlink_ret()).
@@ -132,9 +98,9 @@ clean(Topic) when is_binary(Topic) ->
             {atomic, N} = mnesia:transaction(Fun), N
     end.
 
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 %% gen_server callbacks
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 
 init([Env]) ->
     Copies = case proplists:get_value(storage_type, Env, disc) of
@@ -175,6 +141,14 @@ handle_call(Req, _From, State) ->
     ?LOG(error, "[Retainer] Unexpected call: ~p", [Req]),
     {reply, ignored, State}.
 
+handle_cast({dispatch, Pid, Topic}, State) ->
+    Msgs = case emqx_topic:wildcard(Topic) of
+                       false -> read_messages(Topic);
+                       true  -> match_messages(Topic)
+                   end,
+            [Pid ! {deliver, Topic, Msg} || Msg  <- sort_retained(Msgs)],
+    {noreply, State};
+
 handle_cast(Msg, State) ->
     ?LOG(error, "[Retainer] Unexpected cast: ~p", [Msg]),
     {noreply, State}.
@@ -197,9 +171,9 @@ terminate(_Reason, _State = #state{stats_timer = TRef1, expiry_timer = TRef2}) -
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 %% Internal functions
-%%------------------------------------------------------------------------------
+%%--------------------------------------------------------------------
 
 dispatch_retained(_Topic, []) ->
     ok;
@@ -216,13 +190,51 @@ dispatch_ubidots_messages(Topic) ->
   NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
   dispatch_ubidots_message(NewMessages).
 
+
+sort_retained([]) -> [];
+sort_retained([Msg]) -> [Msg];
+sort_retained(Msgs)  ->
+    lists:sort(fun(#message{timestamp = Ts1}, #message{timestamp = Ts2}) ->
+                   Ts1 =< Ts2
+               end, Msgs).
+
+store_retained(Msg = #message{topic = Topic, payload = Payload, timestamp = Ts}, Env) ->
+    case {is_table_full(Env), is_too_big(size(Payload), Env)} of
+        {false, false} ->
+            ok = emqx_metrics:set('messages.retained', retained_count()),
+            ExpiryTime = case Msg of
+                #message{topic = <<"$SYS/", _/binary>>} -> 0;
+                #message{headers = #{'Message-Expiry-Interval' := Interval}, timestamp = Ts} when Interval =/= 0 ->
+                    Ts + Interval * 1000;
+                #message{timestamp = Ts} ->
+                    case proplists:get_value(expiry_interval, Env, 0) of
+                        0 -> 0;
+                        Interval -> Ts + Interval
+                    end
+            end,
+            mnesia:dirty_write(?TAB, #retained{topic = Topic, msg = Msg, expiry_time = ExpiryTime});
+        {true, _} ->
+            ?LOG(error, "[Retainer] Cannot retain message(topic=~s) for table is full!", [Topic]);
+        {_, true} ->
+            ?LOG(error, "[Retainer] Cannot retain message(topic=~s, payload_size=~p) "
+                              "for payload is too big!", [Topic, iolist_size(Payload)])
+    end.
+
+is_table_full(Env) ->
+    Limit = proplists:get_value(max_retained_messages, Env, 0),
+    Limit > 0 andalso (retained_count() > Limit).
+
+is_too_big(Size, Env) ->
+    Limit = proplists:get_value(max_payload_size, Env, 0),
+    Limit > 0 andalso (Size > Limit).
+
 -spec(read_messages(binary()) -> [emqx_types:message()]).
 read_messages(Topic) ->
     case mnesia:dirty_read(?TAB, Topic) of
         [#retained{msg = Msg, expiry_time = 0}] ->
             [Msg];
         [#retained{topic = Topic, msg = Msg, expiry_time = ExpiryTime}] ->
-            case emqx_time:now_ms() >= ExpiryTime of
+            case erlang:system_time(millisecond) >= ExpiryTime of
                 true ->
                     mnesia:transaction(fun() -> mnesia:delete({?TAB, Topic}) end),
                     [];
@@ -239,7 +251,7 @@ match_messages(Filter) ->
             (#retained{topic = Name, msg = Msg, expiry_time = ExpiryTime}, {Unexpired, Expired}) ->
                 case emqx_topic:match(Name, Filter) of
                     true ->
-                        case ExpiryTime =/= 0 andalso emqx_time:now_ms() >= ExpiryTime of
+                        case ExpiryTime =/= 0 andalso erlang:system_time(millisecond) >= ExpiryTime of
                             true -> {Unexpired, [Msg | Expired]};
                             false ->
                                 {[Msg | Unexpired], Expired}
@@ -272,7 +284,7 @@ match_delete_messages(Filter) ->
 
 -spec(expire_messages() -> any()).
 expire_messages() ->
-    NowMs = emqx_time:now_ms(),
+    NowMs = erlang:system_time(millisecond),
     mnesia:transaction(
         fun() ->
             Match = ets:fun2ms(

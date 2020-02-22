@@ -14,23 +14,27 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
--module(emqx_retainer_sup).
+-module(emqx_retainer_cli_SUITE).
 
--behaviour(supervisor).
+-compile(export_all).
+-compile(nowarn_export_all).
 
--export([start_link/1]).
+-include_lib("eunit/include/eunit.hrl").
 
--export([init/1]).
+all() -> emqx_ct:all(?MODULE).
 
-start_link(Env) ->
-	supervisor:start_link({local, ?MODULE}, ?MODULE, [Env]).
+init_per_testcase(_TestCase, Config) ->
+    Config.
 
-init([Env]) ->
-	{ok, {{one_for_one, 10, 3600},
-          [#{id       => retainer,
-             start    => {emqx_retainer, start_link, [Env]},
-             restart  => permanent,
-             shutdown => 5000,
-             type     => worker,
-             modules  => [emqx_retainer]}]}}.
+end_per_testcase(_TestCase, Config) ->
+    Config.
+
+% t_cmd(_) ->
+%     error('TODO').
+
+% t_unload(_) ->
+%     error('TODO').
+
+% t_load(_) ->
+%     error('TODO').
 
