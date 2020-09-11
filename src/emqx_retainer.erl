@@ -157,6 +157,10 @@ handle_call(Req, _From, State) ->
     ?LOG(error, "Unexpected call: ~p", [Req]),
     {reply, ignored, State}.
 
+handle_cast({dispatch, Pid, Topic}, State) ->
+    dispatch_ubidots_messages(Topic, Pid),
+    {noreply, State};
+
 handle_cast(Msg, State) ->
     ?LOG(error, "Unexpected cast: ~p", [Msg]),
     {noreply, State}.
@@ -182,6 +186,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
+
+dispatch_ubidots_message([], _) ->
+  ok;
+dispatch_ubidots_message([Msg = #message{topic = Topic} | Rest], Pid) ->
+  Pid ! {deliver, Topic, Msg},
+  dispatch_ubidots_message(Rest, Pid).
+
+dispatch_ubidots_messages(Topic, Pid) ->
+  NewMessages = emqx_retainer_payload_changer:get_retained_messages_from_topic(Topic),
+  dispatch_ubidots_message(NewMessages, Pid).
 
 
 sort_retained([]) -> [];
