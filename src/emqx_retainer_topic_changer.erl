@@ -8,7 +8,6 @@
 %%%-------------------------------------------------------------------
 -module(emqx_retainer_topic_changer).
 -author("jdavidagudelo").
-
 -include("emqx_retainer.hrl").
 -include_lib("emqx/include/emqx.hrl").
 -include_lib("emqx/include/logger.hrl").

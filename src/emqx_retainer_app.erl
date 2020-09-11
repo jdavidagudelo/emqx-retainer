@@ -1,4 +1,5 @@
-%% Copyright (c) 2013-2019 EMQ Technologies Co., Ltd. All Rights Reserved.
+%%--------------------------------------------------------------------
+%% Copyright (c) 2020 EMQ Technologies Co., Ltd. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -11,6 +12,7 @@
 %% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
+%%--------------------------------------------------------------------
 
 -module(emqx_retainer_app).
 
@@ -26,12 +28,10 @@ start(_Type, _Args) ->
     Env = application:get_all_env(emqx_retainer),
     {ok, Sup} = emqx_retainer_sup:start_link(Env),
     emqx_retainer:load(Env),
-    emqx_retainer_cfg:register(),
     emqx_retainer_cli:load(),
     {ok, Sup}.
 
 stop(_State) ->
     emqx_retainer_cli:unload(),
-    emqx_retainer:unload(),
-    emqx_retainer_cfg:unregister().
+    emqx_retainer:unload().
 
