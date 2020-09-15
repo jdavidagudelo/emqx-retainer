@@ -28,7 +28,7 @@ MATCH_BRANCH = fun (BranchName) ->
                    match -> BranchName;
                    _ -> case re:run(BranchName, "^[v]?[0-9]\.[0-9]\.([0-9]|(rc|beta|alpha)\.[0-9])", [{capture, none}]) of
                           match -> BranchName;
-                          _ -> "develop"
+                          _ -> "v4.1.0"
                         end
                  end
                end,
