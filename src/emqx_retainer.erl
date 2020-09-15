@@ -187,13 +187,6 @@ dispatch_ubidots_messages(Topic, Pid) ->
   dispatch_ubidots_message(NewMessages, Pid).
 
 
-sort_retained([]) -> [];
-sort_retained([Msg]) -> [Msg];
-sort_retained(Msgs)  ->
-    lists:sort(fun(#message{timestamp = Ts1}, #message{timestamp = Ts2}) ->
-                   Ts1 =< Ts2
-               end, Msgs).
-
 store_retained(Msg = #message{topic = Topic, payload = Payload}, Env) ->
     case {is_table_full(Env), is_too_big(size(Payload), Env)} of
         {false, false} ->
