@@ -27,30 +27,35 @@
 all() -> emqx_ct:all(?MODULE).
 
 %%--------------------------------------------------------------------
-%% Setups
+%% CT Callbacks
 %%--------------------------------------------------------------------
 
 init_per_suite(Config) ->
-    emqx_ct_helpers:start_apps([emqx_retainer]),
+    emqx_ct_helpers:start_apps([emqx, emqx_retainer]),
     Config.
 
 end_per_suite(_Config) ->
-    emqx_ct_helpers:stop_apps([emqx_retainer]).
+    emqx_ct_helpers:stop_apps([emqx_retainer, emqx]).
 
 init_per_testcase(TestCase, Config) ->
     emqx_retainer:clean(<<"#">>),
     case TestCase of
         t_message_expiry_2 ->
             application:set_env(emqx_retainer, expiry_interval, 2000);
+        t_expiry_timer ->
+            application:set_env(emqx_retainer, expiry_interval, 2000);
         _ ->
             application:set_env(emqx_retainer, expiry_interval, 0)
     end,
-    application:stop(emqx_retainer),
     application:ensure_all_started(emqx_retainer),
     Config.
 
+end_per_testcase(_TestCase, Config) ->
+    application:stop(emqx_retainer),
+    Config.
+
 %%--------------------------------------------------------------------
-%% Test Cases
+%% Test cases for retainer
 %%--------------------------------------------------------------------
 
 t_store_and_clean(_) ->
@@ -100,15 +105,14 @@ t_wildcard_subscription(_) ->
     {ok, _} = emqtt:connect(C1),
     emqtt:publish(C1, <<"retained/0">>, <<"this is a retained message 0">>, [{qos, 0}, {retain, true}]),
     emqtt:publish(C1, <<"retained/1">>, <<"this is a retained message 1">>, [{qos, 0}, {retain, true}]),
-    emqtt:publish(C1, <<"retained/a/b/c">>, <<"this is a retained message 2">>, [{qos, 0}, {retain, true}]),
+    emqtt:publish(C1, <<"retained/2">>, <<"this is a retained message 2">>, [{qos, 0}, {retain, true}]),
 
     {ok, #{}, [0]} = emqtt:subscribe(C1,  <<"retained/+">>, 0),
-    {ok, #{}, [0]} = emqtt:subscribe(C1,  <<"retained/+/b/#">>, 0),
     ?assertEqual(3, length(receive_messages(3))),
 
     emqtt:publish(C1, <<"retained/0">>, <<"">>, [{qos, 0}, {retain, true}]),
     emqtt:publish(C1, <<"retained/1">>, <<"">>, [{qos, 0}, {retain, true}]),
-    emqtt:publish(C1, <<"retained/a/b/c">>, <<"">>, [{qos, 0}, {retain, true}]),
+    emqtt:publish(C1, <<"retained/2">>, <<"">>, [{qos, 0}, {retain, true}]),
     ok = emqtt:disconnect(C1).
 
 t_message_expiry(_) ->
@@ -166,8 +170,8 @@ t_clean(_) ->
     {ok, #{}, [0]} = emqtt:subscribe(C1, <<"retained/#">>, [{qos, 0}, {rh, 0}]),
     ?assertEqual(3, length(receive_messages(3))),
 
-    1 = emqx_retainer:clean(<<"retained/test/0">>),
-    2 = emqx_retainer:clean(<<"retained/+">>),
+    emqx_retainer:clean(<<"retained/test/0">>),
+    emqx_retainer:clean(<<"retained/+">>),
     {ok, #{}, [0]} = emqtt:subscribe(C1, <<"retained/#">>, [{qos, 0}, {rh, 0}]),
     ?assertEqual(0, length(receive_messages(3))),
 

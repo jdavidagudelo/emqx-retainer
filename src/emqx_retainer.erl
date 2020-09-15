@@ -67,14 +67,6 @@ on_session_subscribed(_, Topic, #{rh := Rh, is_new := IsNew}) ->
         true -> ok
     end.
 
-%% @private
-dispatch(Pid, Topic) ->
-    Msgs = case emqx_topic:wildcard(Topic) of
-               false -> read_messages(Topic);
-               true  -> match_messages(Topic)
-           end,
-    [Pid ! {deliver, Topic, Msg} || Msg  <- sort_retained(Msgs)].
-
 %% RETAIN flag set to 1 and payload containing zero bytes
 on_message_publish(Msg = #message{flags   = #{retain := true},
                                   topic   = Topic,
@@ -242,44 +234,6 @@ get_expiry_time(#message{timestamp = Ts}, Env) ->
         0 -> 0;
         Interval -> Ts + Interval
     end.
-
--spec(read_messages(binary()) -> [emqx_types:message()]).
-read_messages(Topic) ->
-    case mnesia:dirty_read(?TAB, Topic) of
-        [#retained{msg = Msg, expiry_time = 0}] ->
-            [Msg];
-        [#retained{topic = Topic, msg = Msg, expiry_time = ExpiryTime}] ->
-            case erlang:system_time(millisecond) >= ExpiryTime of
-                true ->
-                    mnesia:transaction(fun() -> mnesia:delete({?TAB, Topic}) end),
-                    [];
-                false ->
-                    [Msg]
-            end;
-        [] -> []
-    end.
-
--spec(match_messages(binary()) -> [emqx_types:message()]).
-match_messages(Filter) ->
-    %% TODO: optimize later...
-    Fun = fun
-            (#retained{topic = Name, msg = Msg, expiry_time = ExpiryTime}, {Unexpired, Expired}) ->
-                case emqx_topic:match(Name, Filter) of
-                    true ->
-                        case ExpiryTime =/= 0 andalso erlang:system_time(millisecond) >= ExpiryTime of
-                            true -> {Unexpired, [Msg | Expired]};
-                            false ->
-                                {[Msg | Unexpired], Expired}
-                        end;
-                    false -> {Unexpired, Expired}
-                end
-            end,
-    {Unexpired, Expired} = mnesia:async_dirty(fun mnesia:foldl/3, [Fun, {[], []}, ?TAB]),
-    mnesia:transaction(
-        fun() ->
-            lists:foreach(fun(Msg) -> mnesia:delete({?TAB, Msg#message.topic}) end, Expired)
-        end),
-    Unexpired.
 
 -spec(match_delete_messages(binary()) -> integer()).
 match_delete_messages(Filter) ->
